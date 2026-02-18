@@ -1,40 +1,25 @@
 import { useEffect, useState } from "react";
-import { getStatus, type BotStatus } from "../api";
+import { type BotStatus } from "../api";
 
 interface StatusDashboardProps {
   running: boolean;
-  onStatusChange: (status: BotStatus) => void;
+  status?: BotStatus;
 }
 
 type Tab = "positions" | "orders";
 
 export function StatusDashboard({
   running,
-  onStatusChange,
+  status,
 }: StatusDashboardProps) {
-  const [status, setStatus] = useState<BotStatus | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("positions");
 
   useEffect(() => {
     if (!running) {
-      setStatus(null);
+      setActiveTab("positions");
       return;
     }
-
-    const fetchStatus = async () => {
-      try {
-        const s = await getStatus();
-        setStatus(s);
-        onStatusChange(s);
-      } catch {
-        setStatus((prev) => prev);
-      }
-    };
-
-    fetchStatus();
-    const id = setInterval(fetchStatus, 2500);
-    return () => clearInterval(id);
-  }, [running, onStatusChange]);
+  }, [running]);
 
   const displayStatus = status ?? {
     running: false,
@@ -78,7 +63,7 @@ export function StatusDashboard({
                 Bot is stopped. Configure and start the bot to see live status.
               </p>
               <a
-                href="https://app.hyperliquid.xyz/API"
+                href="https://app.hyperliquid-testnet.xyz/API"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mt-2 text-sm text-emerald-500 hover:underline"

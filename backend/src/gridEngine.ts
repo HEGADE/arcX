@@ -11,6 +11,12 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+function parseFiniteNumber(value: string | undefined): number | null {
+  if (value == null || value.trim() === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 function priceWithinTolerance(
   a: string,
   b: string,
@@ -31,6 +37,8 @@ export class GridEngine {
   private szDecimals: number | undefined;
   private intervalId: ReturnType<typeof setInterval> | null = null;
   private running = false;
+  private initialAccountValue: number | null = null;
+  private lastError: string | undefined;
 
   async start(config: BotConfig): Promise<{ ok: boolean; error?: string }> {
     if (this.running) {
@@ -73,8 +81,11 @@ export class GridEngine {
 
       this.config = config;
       this.running = true;
+      this.lastError = undefined;
+      this.initialAccountValue = null;
 
       console.log("Reconciling grid (fetching mids, open orders, placing orders)...");
+      await this.enforceRiskGuardrails();
       await this.reconcileGrid();
 
       this.intervalId = setInterval(() => {
@@ -100,6 +111,7 @@ export class GridEngine {
           // Keep original message if key decoding fails unexpectedly.
         }
       }
+      this.lastError = msg;
       console.error("Bot start failed:", msg);
       return { ok: false, error: msg };
     }
@@ -137,6 +149,7 @@ export class GridEngine {
       this.exchange = null;
       this.assetId = undefined;
       this.szDecimals = undefined;
+      this.initialAccountValue = null;
     }
   }
 
@@ -153,8 +166,10 @@ export class GridEngine {
             gridSize: this.config.gridSize,
             spacingPct: this.config.spacingPct,
             orderSize: this.config.orderSize,
+            risk: this.config.risk,
           }
         : undefined,
+      error: this.lastError,
     };
   }
 
@@ -318,9 +333,55 @@ export class GridEngine {
     if (!this.running || !this.exchange || !this.info || !this.config) return;
 
     try {
+      await this.enforceRiskGuardrails();
       await this.reconcileGrid();
     } catch (err) {
-      console.error("Maintenance loop error:", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      this.lastError = msg;
+      console.error("Maintenance loop error:", msg);
+      if (msg.startsWith("Risk guardrail hit:")) {
+        await this.stop();
+      }
+    }
+  }
+
+  private async enforceRiskGuardrails(): Promise<void> {
+    if (!this.config?.risk || !this.info) return;
+
+    const { maxPositionAbs, maxDrawdownUsd } = this.config.risk;
+    const maxPositionAbsNum = parseFiniteNumber(maxPositionAbs);
+    const maxDrawdownUsdNum = parseFiniteNumber(maxDrawdownUsd);
+    if (maxPositionAbsNum == null && maxDrawdownUsdNum == null) return;
+
+    const state = await this.info.clearinghouseState({
+      user: this.config.mainAccountAddress as `0x${string}`,
+    });
+    const marginSummary = state.marginSummary ?? state.crossMarginSummary ?? {};
+    const accountValue = Number(marginSummary.accountValue ?? 0);
+    if (this.initialAccountValue == null && Number.isFinite(accountValue)) {
+      this.initialAccountValue = accountValue;
+    }
+
+    if (maxPositionAbsNum != null) {
+      const symbolPos = (state.assetPositions ?? []).find(
+        (ap: { position: { coin: string } }) =>
+          ap.position.coin.toUpperCase() === this.config!.symbol.toUpperCase()
+      );
+      const absPos = Math.abs(Number(symbolPos?.position.szi ?? 0));
+      if (Number.isFinite(absPos) && absPos > maxPositionAbsNum) {
+        throw new Error(
+          `Risk guardrail hit: |position| ${absPos.toFixed(6)} > maxPositionAbs ${maxPositionAbsNum}`
+        );
+      }
+    }
+
+    if (maxDrawdownUsdNum != null && this.initialAccountValue != null) {
+      const drawdown = this.initialAccountValue - accountValue;
+      if (Number.isFinite(drawdown) && drawdown > maxDrawdownUsdNum) {
+        throw new Error(
+          `Risk guardrail hit: drawdown ${drawdown.toFixed(2)} USD > maxDrawdownUsd ${maxDrawdownUsdNum}`
+        );
+      }
     }
   }
 

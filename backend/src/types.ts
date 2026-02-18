@@ -5,6 +5,12 @@ export interface BotConfig {
   gridSize: number;
   spacingPct: number;
   orderSize: string;
+  risk?: RiskConfig;
+}
+
+export interface RiskConfig {
+  maxPositionAbs?: string;
+  maxDrawdownUsd?: string;
 }
 
 export interface GridLevel {

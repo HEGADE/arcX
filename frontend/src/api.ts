@@ -7,6 +7,10 @@ export interface BotConfig {
   gridSize: number;
   spacingPct: number;
   orderSize: string;
+  risk?: {
+    maxPositionAbs?: string;
+    maxDrawdownUsd?: string;
+  };
 }
 
 export interface BotStatus {

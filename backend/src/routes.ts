@@ -16,6 +16,7 @@ router.post("/api/bot/start", async (req, res) => {
       gridSize,
       spacingPct,
       orderSize,
+      risk,
     } = body;
 
     if (
@@ -41,6 +42,32 @@ router.post("/api/bot/start", async (req, res) => {
       spacingPct: Number(spacingPct),
       orderSize: String(orderSize),
     };
+
+    const maxPositionAbsRaw = risk?.maxPositionAbs;
+    if (maxPositionAbsRaw != null && String(maxPositionAbsRaw).trim() !== "") {
+      const maxPositionAbs = Number(maxPositionAbsRaw);
+      if (!Number.isFinite(maxPositionAbs) || maxPositionAbs <= 0) {
+        res.status(400).json({
+          ok: false,
+          error: "risk.maxPositionAbs must be a positive number",
+        });
+        return;
+      }
+      config.risk = { ...(config.risk ?? {}), maxPositionAbs: String(maxPositionAbs) };
+    }
+
+    const maxDrawdownUsdRaw = risk?.maxDrawdownUsd;
+    if (maxDrawdownUsdRaw != null && String(maxDrawdownUsdRaw).trim() !== "") {
+      const maxDrawdownUsd = Number(maxDrawdownUsdRaw);
+      if (!Number.isFinite(maxDrawdownUsd) || maxDrawdownUsd <= 0) {
+        res.status(400).json({
+          ok: false,
+          error: "risk.maxDrawdownUsd must be a positive number",
+        });
+        return;
+      }
+      config.risk = { ...(config.risk ?? {}), maxDrawdownUsd: String(maxDrawdownUsd) };
+    }
 
     if (config.gridSize < 1 || config.gridSize > 20) {
       res.status(400).json({ ok: false, error: "gridSize must be 1-20" });

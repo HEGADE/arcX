@@ -27,6 +27,10 @@ A full-stack application to configure and run a grid trading bot on Hyperliquid 
 
 4. **Clean stop**: On stop, cancel all open grid orders for the symbol.
 
+5. **Risk guardrails (optional)**: If configured, the bot auto-stops and cancels managed orders when either:
+   - absolute position size exceeds `maxPositionAbs`
+   - account drawdown from start exceeds `maxDrawdownUsd`
+
 ## API Wallet Setup
 
 Before using the bot:
@@ -98,6 +102,7 @@ karnot/
 - **@nktkas/hyperliquid**: Community TypeScript SDK.
 - **API Wallet**: Trade-only auth; main wallet private key never used by the bot.
 - **Reconciliation**: Compare expected grid vs open orders before placing; use hex `cloid` for idempotency.
+- **Risk controls**: Optional max position and max drawdown limits trigger automatic shutdown.
 - **Testnet only**: Fixed to Hyperliquid testnet per assignment requirement.
 
 ## Security Considerations

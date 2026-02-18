@@ -6,7 +6,6 @@ import {
   useState,
 } from "react";
 import type { BotConfig } from "../api";
-import { startBot, stopBot } from "../api";
 
 export interface ConfigFormHandle {
   triggerStart: () => void;
@@ -15,9 +14,9 @@ export interface ConfigFormHandle {
 
 interface ConfigFormProps {
   running: boolean;
-  onStart: () => void;
-  onStop: () => void;
-  onLoadingChange?: (loading: boolean) => void;
+  onStartConfig: (config: BotConfig) => Promise<void>;
+  onStopBot: () => Promise<void>;
+  loading: boolean;
   onCanStartChange?: (canStart: boolean) => void;
 }
 
@@ -25,9 +24,9 @@ export const ConfigForm = forwardRef<ConfigFormHandle, ConfigFormProps>(
   (
     {
       running,
-      onStart,
-      onStop,
-      onLoadingChange,
+      onStartConfig,
+      onStopBot,
+      loading,
       onCanStartChange,
     },
     ref
@@ -38,14 +37,11 @@ export const ConfigForm = forwardRef<ConfigFormHandle, ConfigFormProps>(
     const [gridSize, setGridSize] = useState(5);
     const [spacingPct, setSpacingPct] = useState(0.5);
     const [orderSize, setOrderSize] = useState("0.01");
+    const [maxPositionAbs, setMaxPositionAbs] = useState("");
+    const [maxDrawdownUsd, setMaxDrawdownUsd] = useState("");
     const [error, setError] = useState("");
-    const [loading, setLoading] = useState(false);
 
     const canStart = !!(apiKey.trim() && mainAddress.trim());
-
-    useEffect(() => {
-      onLoadingChange?.(loading);
-    }, [loading, onLoadingChange]);
 
     useEffect(() => {
       onCanStartChange?.(canStart);
@@ -53,7 +49,6 @@ export const ConfigForm = forwardRef<ConfigFormHandle, ConfigFormProps>(
 
     const handleStart = useCallback(async () => {
       setError("");
-      setLoading(true);
       try {
         const config: BotConfig = {
           apiWalletPrivateKey: apiKey.trim(),
@@ -63,35 +58,30 @@ export const ConfigForm = forwardRef<ConfigFormHandle, ConfigFormProps>(
           spacingPct,
           orderSize,
         };
-        const result = await startBot(config);
-        if (result.ok) {
-          onStart();
-        } else {
-          setError(result.error || "Failed to start");
+        if (maxPositionAbs.trim() || maxDrawdownUsd.trim()) {
+          config.risk = {
+            ...(maxPositionAbs.trim()
+              ? { maxPositionAbs: maxPositionAbs.trim() }
+              : {}),
+            ...(maxDrawdownUsd.trim()
+              ? { maxDrawdownUsd: maxDrawdownUsd.trim() }
+              : {}),
+          };
         }
+        await onStartConfig(config);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to start");
-      } finally {
-        setLoading(false);
       }
-    }, [apiKey, mainAddress, symbol, gridSize, spacingPct, orderSize, onStart]);
+    }, [apiKey, mainAddress, symbol, gridSize, spacingPct, orderSize, maxPositionAbs, maxDrawdownUsd, onStartConfig]);
 
     const handleStop = useCallback(async () => {
       setError("");
-      setLoading(true);
       try {
-        const result = await stopBot();
-        if (result.ok) {
-          onStop();
-        } else {
-          setError(result.error || "Failed to stop");
-        }
+        await onStopBot();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to stop");
-      } finally {
-        setLoading(false);
       }
-    }, [onStop]);
+    }, [onStopBot]);
 
     useImperativeHandle(
       ref,
@@ -186,7 +176,7 @@ export const ConfigForm = forwardRef<ConfigFormHandle, ConfigFormProps>(
                 type="number"
                 min={0.01}
                 max={10}
-                step={0.1}
+                step={0.01}
                 value={spacingPct}
                 onChange={(e) => setSpacingPct(Number(e.target.value))}
                 className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
@@ -202,6 +192,38 @@ export const ConfigForm = forwardRef<ConfigFormHandle, ConfigFormProps>(
                 value={orderSize}
                 onChange={(e) => setOrderSize(e.target.value)}
                 placeholder="0.01"
+                className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
+                disabled={running}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs text-zinc-500">
+                Max Position (abs)
+              </label>
+              <input
+                type="number"
+                min={0}
+                step={0.001}
+                value={maxPositionAbs}
+                onChange={(e) => setMaxPositionAbs(e.target.value)}
+                placeholder="Optional, e.g. 0.03"
+                className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
+                disabled={running}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-zinc-500">
+                Max Drawdown (USD)
+              </label>
+              <input
+                type="number"
+                min={0}
+                step={0.01}
+                value={maxDrawdownUsd}
+                onChange={(e) => setMaxDrawdownUsd(e.target.value)}
+                placeholder="Optional, e.g. 5"
                 className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
                 disabled={running}
               />
