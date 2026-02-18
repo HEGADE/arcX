@@ -1,0 +1,13 @@
+services:
+  backend:
+    build: ./backend
+    ports: ["3001:3001"]
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - HYPERLIQUID_TESTNET=true
+
+  frontend:
+    build: ./frontend
+    ports: ["80:80"]
+    depends_on: [backend]
