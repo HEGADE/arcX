@@ -52,6 +52,8 @@ Then provide the bot with:
 docker-compose up
 ```
 
+No `.env` file is required for the default Docker workflow. `docker-compose.yml` and nginx routing are already configured for local run.
+
 - Frontend: http://localhost
 - Backend: http://localhost:3001
 
